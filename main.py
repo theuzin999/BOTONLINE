@@ -212,10 +212,7 @@ def start_driver():
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
 
-    return webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
-    )
+    return webdriver.Chrome(options=options)
 
 # =============================================================
 # 🚀 LOOP PRINCIPAL
