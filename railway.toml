@@ -2,7 +2,13 @@
 # Para ARM64 no Railway: instala Chromium + Chromedriver do sistema
 nixPkgs = [
   "chromium",
-  "chromedriver"
+  "chromedriver",
+  # DEPENDÊNCIAS ESSENCIAIS ADICIONADAS PARA RESOLVER O ERRO 127:
+  "libnss", 
+  "libgconf",
+  "libxss", 
+  "alsa-lib",
+  "nss"
 ]
 
 [deploy]
