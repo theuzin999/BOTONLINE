@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
 
-# atualiza pacotes e instala dependências + xvfb + chromium
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
@@ -29,9 +29,7 @@ COPY . .
 
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROME_DRIVER_PATH=/usr/bin/chromedriver
-
-# aqui está o segredo -> força o container rodar num DISPLAY virtual
 ENV DISPLAY=:99
 
-# inicia XVFB e depois inicia o bot
-CMD bash -c "Xvfb :99 -screen 0 1920x1080x24 & python main.py"
+# inicia Xvfb e depois roda o main.py
+CMD bash -c "Xvfb :99 -screen 0 1920x1080x24 & sleep 1 && python main.py"
