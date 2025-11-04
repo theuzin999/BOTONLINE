@@ -1,4 +1,5 @@
 [build]
+# instala o Chromium + Chromedriver no container
 nixPkgs = [
   "chromium",
   "chromedriver"
