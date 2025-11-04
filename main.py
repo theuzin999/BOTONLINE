@@ -14,24 +14,22 @@ import os
 import pytz 
 
 # =============================================================
-# 🔥 CONFIGURAÇÃO FIREBASE
+# 🔥 CONFIGURAÇÃO FIREBASE (via variável string do Railway)
 # =============================================================
-SERVICE_ACCOUNT_FILE = "/app/serviceAccountKey.json"
-DATABASE_URL = 'https://history-dashboard-a70ee-default-rtdb.firebaseio.com'
+import json
+
+DATABASE_URL = os.getenv("DATABASE_URL")  # ela já está lá no railway
+credJson = os.getenv("serviceAccountKey.json")
 
 try:
     if not firebase_admin._apps:
-        cred = credentials.Certificate(SERVICE_ACCOUNT_FILE)
+        cred = credentials.Certificate(json.loads(credJson))
         firebase_admin.initialize_app(cred, {
-            'databaseURL': DATABASE_URL
+            "databaseURL": DATABASE_URL
         })
     print("✅ Firebase Admin SDK inicializado com sucesso. O bot salvará dados.")
-except FileNotFoundError:
-    print("\n❌ ERRO CRÍTICO: Arquivo de credenciais 'serviceAccountKey.json' não encontrado.")
-    print("Baixe a chave JSON do console do Firebase e coloque na mesma pasta deste script.")
-    exit()
 except Exception as e:
-    print(f"\n❌ ERRO DE CONEXÃO FIREBASE: {e}")
+    print("\n❌ ERRO DE CONEXÃO FIREBASE:", e)
     exit()
 
 # =============================================================
