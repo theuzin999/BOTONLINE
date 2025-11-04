@@ -1,0 +1,8 @@
+[build]
+nixPkgs = [
+  "chromium",
+  "chromedriver",
+]
+
+[deploy]
+startCommand = "python main.py"
