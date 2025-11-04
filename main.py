@@ -214,9 +214,10 @@ def start_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--remote-debugging-port=9222")
+    options.binary_location = "/usr/bin/chromium"
 
-service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
-return webdriver.Chrome(service=service, options=options)
+    service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
+    return webdriver.Chrome(service=service, options=options)
 
 
 # =============================================================
