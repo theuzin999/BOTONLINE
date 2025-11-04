@@ -4,7 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.chrome import ChromeDriverManager, ChromeType
+from webdriver_manager.core.utils import ChromeType
 from time import sleep, time
 from datetime import datetime, date
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
@@ -219,7 +219,6 @@ def start_driver():
 
     service = Service(ChromeDriverManager(chrome_type=ChromeType.GOOGLE).install())
     return webdriver.Chrome(service=service, options=options)
-
 
 # =============================================================
 # 🚀 LOOP PRINCIPAL
