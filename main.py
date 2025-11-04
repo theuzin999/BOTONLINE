@@ -19,7 +19,7 @@ import pytz
 import json
 
 DATABASE_URL = os.getenv("DATABASE_URL")  # ela já está lá no railway
-credJson = os.getenv("SERVICE_ACCOUNT_KEY")
+credJson = os.getenv("SERVICE.ACCOUNT.KEY")
 
 try:
     cred = credentials.Certificate(json.loads(credJson))
@@ -202,6 +202,9 @@ def process_login(driver):
     
     return True
 
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
 def start_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
@@ -211,7 +214,8 @@ def start_driver():
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--remote-debugging-port=9222")
 
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    service = Service(ChromeDriverManager().install())
+    return webdriver.Chrome(service=service, options=options)
 
 
 # =============================================================
