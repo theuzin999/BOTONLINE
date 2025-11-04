@@ -3,7 +3,7 @@
 nixPkgs = [
   "chromium",
   "chromedriver",
-  # DEPENDÊNCIAS ESSENCIAIS ADICIONADAS PARA RESOLVER O ERRO 127:
+  # Dependências essenciais para o ChromeDriver rodar em ambiente Linux/headless:
   "libnss", 
   "libgconf",
   "libxss", 
