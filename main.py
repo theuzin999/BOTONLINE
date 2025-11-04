@@ -1,57 +1,210 @@
-import os, json
-from time import sleep, time
-from datetime import datetime, date
-import pytz
-
-# Selenium
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+# from webdriver_manager.chrome import ChromeDriverManager  # REMOVIDO
+# from webdriver_manager.chrome import ChromeDriverManager, ChromeType # REMOVIDO
+from time import sleep, time
+from datetime import datetime, date
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
-
-# Firebase
 import firebase_admin
-from firebase_admin import credentials, db
+from firebase_admin import credentials
+from firebase_admin import db
+import os
+import pytz 
 
-# =========================
-# 🔧 VARIÁVEIS DE AMBIENTE
-# =========================
+# =============================================================
+# 🔥 CONFIGURAÇÃO FIREBASE (via variável string do Railway)
+# =============================================================
+import json
+
+DATABASE_URL = os.getenv("DATABASE_URL")  # ela já está lá no railway
+credJson = os.getenv("SERVICE_ACCOUNT_KEY")
+
+try:
+    cred = credentials.Certificate(json.loads(credJson))
+    firebase_admin.initialize_app(cred, {
+        "databaseURL": DATABASE_URL
+    })
+    print("✅ Firebase Admin SDK inicializado com sucesso.")
+except Exception as e:
+    print("\n❌ ERRO DE CONEXÃO FIREBASE:", e)
+    exit()
+
+# =============================================================
+# ⚙️ VARIÁVEIS PRINCIPAIS
+# =============================================================
+URL_DO_SITE = "https://www.goathbet.com"
+LINK_AVIATOR = "https://www.goathbet.com/game/spribe-aviator"
+COOKIES_FILE = "cookies.pkl" 
+
 EMAIL = os.getenv("EMAIL")
 PASSWORD = os.getenv("PASSWORD")
-DATABASE_URL = os.getenv("DATABASE_URL")
-SERVICE_ACCOUNT_KEY = os.getenv("SERVICE_ACCOUNT_KEY")  # JSON inteiro como texto
 
-# Se quiser mudar depois, coloque como ENV também:
-URL_HOME = "https://www.goathbet.com"
-URL_AVIATOR = "https://www.goathbet.com/game/spribe-aviator"
-
-# Loop & comportamento “SEGURO”
-POLLING_INTERVAL = 1.0          # checagem a cada 1s
-INTERVAL_MIN_ENTRE_SAVES = 2.0  # evita flood no Firebase
-MAX_INATIVIDADE = 360           # 6 min sem novo valor => reinicia driver
-RETRY_DELAY = 5                 # SEGURO: espera 5s antes de reiniciar driver
+POLLING_INTERVAL = 1.0          # Intervalo entre as checagens (1 segundo)
+INTERVALO_MINIMO_ENVIO = 2.0    # Mínimo de tempo entre dois envios (segundos)
+TEMPO_MAX_INATIVIDADE = 360     # 6 minutos (360 segundos)
 TZ_BR = pytz.timezone("America/Sao_Paulo")
 
-# =========================
-# 🔥 FIREBASE
-# =========================
-def init_firebase():
-    if not SERVICE_ACCOUNT_KEY or not DATABASE_URL:
-        raise RuntimeError("Faltam ENV: SERVICE_ACCOUNT_KEY e/ou DATABASE_URL")
-    cred = credentials.Certificate(json.loads(SERVICE_ACCOUNT_KEY))
-    firebase_admin.initialize_app(cred, {"databaseURL": DATABASE_URL})
-    print("✅ Firebase inicializado.")
+# =============================================================
+# 🔧 FUNÇÕES AUXILIARES
+# =============================================================
+def getColorClass(value):
+    """Retorna a cor conforme o multiplicador."""
+    m = float(value)
+    if 1.0 <= m < 2.0:
+        return "blue-bg"
+    if 2.0 <= m < 10.0:
+        return "purple-bg"
+    if m >= 10.0:
+        return "magenta-bg"
+    return "default-bg"
 
-# =========================
-# 🧭 DRIVER (Chromium headless ARM64 no Railway)
-# =========================
-def _find(path_list):
-    for p in path_list:
-        if os.path.exists(p):
-            return p
-    return None
+def safe_click(driver, by, value, timeout=5):
+    """Tenta clicar em um elemento de forma segura."""
+    try:
+        el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, value)))
+        el.click()
+        return True
+    except Exception:
+        return False
+
+def safe_find(driver, by, value, timeout=5):
+    """Tenta encontrar um elemento de forma segura."""
+    try:
+        return WebDriverWait(driver, timeout).until(EC.presence_of_element_located((by, value)))
+    except Exception:
+        return None
+
+
+def initialize_game_elements(driver):
+    """Localiza iframe e histórico do Aviator."""
+    POSSIVEIS_IFRAMES = [
+        '//iframe[contains(@src, "/aviator/")]',
+        '//iframe[contains(@src, "spribe")]',
+        '//iframe[contains(@src, "aviator-game")]'
+    ]
+    
+    # LISTA DE SELETORES EXPANDIDA E MAIS ROBUSTA
+    POSSIVEIS_HISTORICOS = [
+        # Seletores CSS (mais comuns)
+        ('.rounds-history', By.CSS_SELECTOR),
+        ('.history-list', By.CSS_SELECTOR),
+        ('.multipliers-history', By.CSS_SELECTOR),
+        ('.result-history', By.CSS_SELECTOR),
+        ('[data-testid="history"]', By.CSS_SELECTOR),
+        ('.game-history', By.CSS_SELECTOR),
+        # Seletores de fallback
+        ('.bet-history', By.CSS_SELECTOR),
+        ('div[class*="recent-list"]', By.CSS_SELECTOR),
+        ('ul.results-list', By.CSS_SELECTOR),
+        ('div.history-block', By.CSS_SELECTOR),
+        ('div[class*="history-container"]', By.CSS_SELECTOR),
+        # Seletores XPath genéricos (última tentativa)
+        ('//div[contains(@class, "history")]', By.XPATH),
+        ('//div[contains(@class, "rounds-list")]', By.XPATH)
+    ]
+
+    iframe = None
+    for xpath in POSSIVEIS_IFRAMES:
+        try:
+            driver.switch_to.default_content() 
+            iframe = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, xpath))
+            )
+            driver.switch_to.frame(iframe)
+            print(f"✅ Iframe encontrado com XPath: {xpath}")
+            break
+        except Exception:
+            continue
+
+    if not iframe:
+        print("⚠️ Nenhum iframe encontrado. Verifique se o jogo está carregado.")
+        return None, None 
+
+    historico_elemento = None
+    for selector, by_method in POSSIVEIS_HISTORICOS:
+        try:
+            historico_elemento = WebDriverWait(driver, 7).until(
+                EC.presence_of_element_located((by_method, selector))
+            )
+            print(f"✅ Seletor de histórico encontrado: {selector} ({by_method})")
+            break
+        except Exception:
+            continue
+
+    if not historico_elemento:
+        print("⚠️ Nenhum seletor de histórico encontrado!")
+        driver.switch_to.default_content()
+        return None, None 
+
+    return iframe, historico_elemento 
+
+# =============================================================
+# 🔑 FLUXO DE LOGIN E NAVEGAÇÃO
+# =============================================================
+def process_login(driver):
+    """Executa o fluxo de login e navegação para o Aviator."""
+    if not EMAIL or not PASSWORD:
+        print("❌ ERRO: EMAIL ou PASSWORD não configurados.")
+        return False
+
+    print("➡️ Executando login automático...")
+
+    driver.get(URL_DO_SITE)
+    sleep(2)
+
+    # 1. Confirma maior de 18
+    if safe_click(driver, By.CSS_SELECTOR, 'button[data-age-action="yes"]', 5):
+        print("✅ Confirmado maior de 18.")
+        sleep(1)
+
+    # 2. Abre janela de login
+    if not safe_click(driver, By.CSS_SELECTOR, 'a[data-ix="window-login"].btn-small.w-button', 5):
+        print("❌ Botão 'Login' inicial não encontrado.")
+        return False
+    sleep(1)
+
+    # 3. Preenche e-mail e senha
+    email_input = safe_find(driver, By.ID, "field-15", 5)
+    pass_input = safe_find(driver, By.ID, "password-login", 5)
+
+    if email_input and pass_input:
+        email_input.clear()
+        email_input.send_keys(EMAIL)
+        pass_input.clear()
+        pass_input.send_keys(PASSWORD)
+        sleep(0.5)
+        
+        # 4. Clica no botão final de login
+        if safe_click(driver, By.CSS_SELECTOR, "a[login-btn].btn-small.btn-color-2.full-width.w-inline-block", 5):
+            print("✅ Credenciais preenchidas e login confirmado.")
+            sleep(5) 
+        else:
+            print("❌ Botão final de login não encontrado ou falha ao clicar.")
+            return False
+    else:
+        print("⚠️ Campos de login não encontrados!")
+        return False
+        
+    # 5. Aceita cookies
+    safe_click(driver, By.XPATH, "//button[contains(., 'Aceitar')]", 4)
+    print("✅ Cookies aceitos (se aplicável).")
+    sleep(1)
+
+    # 6. Abre Aviator
+    if safe_click(driver, By.CSS_SELECTOR, "img.slot-game", 4):
+        print("✅ Aviator aberto via imagem.")
+    else:
+        driver.get(LINK_AVIATOR)
+        print("ℹ️ Indo direto para o Aviator via link.")
+    sleep(10) 
+    
+    return True
+
+# Importação de Service mantida, mas ChromeDriverManager removida
+from selenium.webdriver.chrome.service import Service
 
 def start_driver():
     options = webdriver.ChromeOptions()
@@ -64,182 +217,47 @@ def start_driver():
     options.add_argument("--disable-features=BlinkGenPropertyTrees")
     options.add_argument("--window-size=1920,1080")
 
-    # Binário do Chromium (nix/apt no Railway ARM64)
-    chrome_bin = _find([
-        "/usr/bin/chromium",
-        "/nix/store/chromium/bin/chromium",
-        "/usr/bin/google-chrome"  # fallback, se existir
-    ])
-    if chrome_bin:
-        options.binary_location = chrome_bin
+    # Corrigido para usar o chromedriver instalado pelo NixPkgs no Railway
+    service = Service("/usr/bin/chromedriver")
+    
+    return webdriver.Chrome(service=service, options=options)
 
-    # Chromedriver (instalado via nixPkgs no railway.toml)
-    chromedriver_path = _find([
-        "/usr/bin/chromedriver",
-        "/nix/store/chromedriver/bin/chromedriver"
-    ])
 
-    if chromedriver_path:
-        service = Service(chromedriver_path)
-        driver = webdriver.Chrome(service=service, options=options)
-    else:
-        # fallback: Selenium Manager tenta resolver (pode falhar no ARM64)
-        driver = webdriver.Chrome(options=options)
-
-    return driver
-
-# =========================
-# 🎯 UTIL
-# =========================
-def safe_click(driver, by, sel, t=5):
-    try:
-        WebDriverWait(driver, t).until(EC.element_to_be_clickable((by, sel))).click()
-        return True
-    except Exception:
-        return False
-
-def safe_find(driver, by, sel, t=5):
-    try:
-        return WebDriverWait(driver, t).until(EC.presence_of_element_located((by, sel)))
-    except Exception:
-        return None
-
-def get_color(mult):
-    m = float(mult)
-    if 1.0 <= m < 2.0:  return "blue-bg"
-    if 2.0 <= m < 10.0: return "purple-bg"
-    if m >= 10.0:       return "magenta-bg"
-    return "default-bg"
-
-# =========================
-# 🔑 LOGIN
-# =========================
-def do_login(driver):
-    if not EMAIL or not PASSWORD:
-        print("❌ Configure EMAIL e PASSWORD no Railway.")
-        return False
-
-    print("➡️ Abrindo página…")
-    driver.get(URL_HOME)
-    sleep(2)
-
-    # Idade (se houver)
-    safe_click(driver, By.CSS_SELECTOR, 'button[data-age-action="yes"]', 3)
-
-    # Abrir modal login
-    if not safe_click(driver, By.CSS_SELECTOR, 'a[data-ix="window-login"].btn-small.w-button', 5):
-        print("⚠️ Botão de login inicial não encontrado.")
-        return False
-
-    # Inputs
-    email_input = safe_find(driver, By.ID, "field-15", 5)
-    pass_input  = safe_find(driver, By.ID, "password-login", 5)
-    if not (email_input and pass_input):
-        print("⚠️ Campos de login não encontrados.")
-        return False
-
-    email_input.clear(); email_input.send_keys(EMAIL)
-    pass_input.clear();  pass_input.send_keys(PASSWORD)
-    sleep(0.4)
-
-    # Confirmar
-    if not safe_click(driver, By.CSS_SELECTOR, 'a[login-btn].btn-small.btn-color-2.full-width.w-inline-block', 5):
-        print("⚠️ Botão final de login não encontrado.")
-        return False
-
-    sleep(5)
-    # Cookies (se aparecer)
-    safe_click(driver, By.XPATH, "//button[contains(., 'Aceitar')]", 3)
-
-    # Ir ao Aviator
-    if not safe_click(driver, By.CSS_SELECTOR, "img.slot-game", 3):
-        driver.get(URL_AVIATOR)
-        print("ℹ️ Indo direto para o Aviator…")
-    sleep(8)
-    return True
-
-# =========================
-# 🧩 ENCONTRAR IFRAME & HISTÓRICO
-# =========================
-IFRAMES_XPATH = [
-    '//iframe[contains(@src, "/aviator/")]',
-    '//iframe[contains(@src, "spribe")]',
-    '//iframe[contains(@src, "aviator-game")]'
-]
-HISTORY_CANDIDATES = [
-    (By.CSS_SELECTOR, '.rounds-history'),
-    (By.CSS_SELECTOR, '.history-list'),
-    (By.CSS_SELECTOR, '.multipliers-history'),
-    (By.CSS_SELECTOR, '.result-history'),
-    (By.CSS_SELECTOR, '[data-testid="history"]'),
-    (By.CSS_SELECTOR, '.game-history'),
-    (By.CSS_SELECTOR, '.bet-history'),
-    (By.CSS_SELECTOR, 'div[class*="recent-list"]'),
-    (By.CSS_SELECTOR, 'ul.results-list'),
-    (By.CSS_SELECTOR, 'div.history-block'),
-    (By.CSS_SELECTOR, 'div[class*="history-container"]'),
-    (By.XPATH, '//div[contains(@class, "history")]'),
-    (By.XPATH, '//div[contains(@class, "rounds-list")]'),
-]
-
-def attach_history(driver):
-    iframe_el = None
-    for xp in IFRAMES_XPATH:
-        try:
-            driver.switch_to.default_content()
-            iframe_el = WebDriverWait(driver, 7).until(EC.presence_of_element_located((By.XPATH, xp)))
-            driver.switch_to.frame(iframe_el)
-            print(f"✅ Iframe OK: {xp}")
-            break
-        except Exception:
-            continue
-    if not iframe_el:
-        print("⚠️ Não achei iframe.")
-        return None, None
-
-    hist = None
-    for by, sel in HISTORY_CANDIDATES:
-        try:
-            hist = WebDriverWait(driver, 6).until(EC.presence_of_element_located((by, sel)))
-            print(f"✅ Histórico OK: {sel}")
-            break
-        except Exception:
-            continue
-
-    if not hist:
-        print("⚠️ Não achei histórico dentro do iframe.")
-        driver.switch_to.default_content()
-        return None, None
-
-    return iframe_el, hist
-
-# =========================
-# 🚀 LOOP PRINCIPAL (SEGURO)
-# =========================
+# =============================================================
+# 🚀 LOOP PRINCIPAL
+# =============================================================
 def start_bot(relogin_done_for: date = None):
-    print("\n====================================")
-    print("      INICIALIZANDO GOATHBOT")
-    print("====================================")
-
+    print("\n==============================================")
+    print("         INICIALIZANDO GOATHBOT")
+    print("==============================================")
+    
+    # A exceção no seu log original estava aqui.
+    # O bloco try/except no fluxo de inicialização do start_bot cuidará das falhas.
     driver = start_driver()
-
-    def setup():
-        if not do_login(driver):
+    
+    # === FLUXO DE INICIALIZAÇÃO E RECONEXÃO ===
+    def setup_game(driver):
+        if not process_login(driver):
             return None, None
-        return attach_history(driver)
+        
+        iframe, hist = initialize_game_elements(driver) 
+        if not hist:
+            print("❌ Não conseguiu iniciar o jogo. Tentando novamente...")
+            return None, None
+        return iframe, hist
 
-    iframe, hist = setup()
+    iframe, hist = setup_game(driver)
+
     if not hist:
-        try: driver.quit()
-        except: pass
-        print(f"⏳ Retentando em {RETRY_DELAY}s…")
-        sleep(RETRY_DELAY)
-        return start_bot()
+        driver.quit()
+        # Chama a si mesma para tentar novamente do zero em caso de falha inicial
+        return start_bot() 
 
-    last_sent = None
-    last_sent_ts = 0.0
-    last_seen_ts = time()
-    relogin_done_for = relogin_done_for or date.today()
+    LAST_SENT = None
+    ULTIMO_ENVIO = time() 
+    ULTIMO_MULTIPLIER_TIME = time() 
+    falhas = 0
+    relogin_done_for = relogin_done_for if relogin_done_for else date.today() 
 
     print("✅ Captura iniciada.\n")
 
@@ -247,109 +265,117 @@ def start_bot(relogin_done_for: date = None):
         try:
             now_br = datetime.now(TZ_BR)
 
-            # Reinício diário (23:59) — evita chrome ficar dias aberto
-            if now_br.hour == 23 and now_br.minute >= 59 and relogin_done_for != now_br.date():
-                print("🕛 Reinício diário…")
-                try: driver.quit()
-                except: pass
-                sleep(60)
-                return start_bot(relogin_done_for=now_br.date())
+            # === REINÍCIO PROGRAMADO DIÁRIO (23:59 BR) ===
+            # Verifica se é 23:59 (ou maior) e se o reinício ainda não foi feito hoje
+            if now_br.hour == 23 and now_br.minute >= 59 and (relogin_done_for != now_br.date()):
+                print(f"🕛 REINÍCIO PROGRAMADO: Fechando bot às {now_br.strftime('%H:%M:%S')} para reabrir após 00:00.")
+                driver.quit()
+                
+                # O BOT FICARÁ OFFLINE POR 60 SEGUNDOS
+                print("💤 Bot offline por 1 minuto... (Reiniciando em 00:00:xx)")
+                sleep(60) 
+                
+                # Reinicia o script, atualizando o dia para evitar repetição
+                return start_bot(relogin_done_for=now_br.date()) 
+            # =========================================
 
-            # Timeout de inatividade
-            if (time() - last_seen_ts) > MAX_INATIVIDADE:
-                print("🚨 Inatividade > 6min. Reiniciando…")
-                try: driver.quit()
-                except: pass
-                sleep(RETRY_DELAY)
-                return start_bot()
+            # === VERIFICAÇÃO DE INATIVIDADE (6 MIN) ===
+            if (time() - ULTIMO_MULTIPLIER_TIME) > TEMPO_MAX_INATIVIDADE:
+                 print(f"🚨 Inatividade por mais de 6 minutos! Último envio em: {datetime.fromtimestamp(ULTIMO_MULTIPLIER_TIME).strftime('%H:%M:%S')}. Reiniciando o bot...")
+                 driver.quit()
+                 # Reinicia o script do zero
+                 return start_bot()
+            # =========================================
 
-            # Garante contexto do iframe sempre ativo
+
+            # === RECONEXÃO COM IFRAME ===
             try:
-                driver.switch_to.frame(iframe)
+                # O switch_to.frame deve ocorrer antes de acessar hist
+                driver.switch_to.frame(iframe) 
             except Exception:
+                # Se falhar, tenta restabelecer o iframe e hist
                 driver.switch_to.default_content()
-                iframe, hist = attach_history(driver)
+                iframe, hist = initialize_game_elements(driver) 
                 if not hist:
-                    print("⚠️ Perdi iframe/hist. Reiniciando…")
-                    try: driver.quit()
-                    except: pass
-                    sleep(RETRY_DELAY)
-                    return start_bot()
+                    print("⚠️ Falha crítica: Iframe/Histórico perdido. Reiniciando o bot...")
+                    driver.quit()
+                    return start_bot() 
 
-            text = hist.text.strip() if hist else ""
-            if not text:
+            # === LEITURA DOS RESULTADOS ===
+            resultados_texto = hist.text.strip() if hist else ""
+            if not resultados_texto:
+                falhas += 1
+                if falhas > 5:
+                    print("⚠️ Mais de 5 falhas de leitura. Tentando re-inicializar elementos...")
+                    driver.switch_to.default_content()
+                    iframe, hist = initialize_game_elements(driver)
+                    falhas = 0
                 sleep(1)
                 continue
+            
+            falhas = 0 # Se leu com sucesso, zera as falhas
 
-            # Extrai multiplicadores
-            vals, seen = [], set()
-            for s in text.split("\n"):
-                s = s.replace("x", "").strip()
+            resultados = []
+            seen = set()
+            for n in resultados_texto.split("\n"):
+                n = n.replace("x", "").strip()
                 try:
-                    if s:
-                        v = float(s)
+                    if n:
+                        v = float(n)
                         if v >= 1.0 and v not in seen:
-                            seen.add(v); vals.append(v)
+                            seen.add(v)
+                            resultados.append(v)
                 except ValueError:
                     pass
 
-            if vals:
-                novo = vals[0]
-                if (novo != last_sent) and ((time() - last_sent_ts) > INTERVAL_MIN_ENTRE_SAVES):
-                    now = datetime.now(TZ_BR)
+            # === ENVIO PARA FIREBASE ===
+            if resultados:
+                novo = resultados[0] 
+                if (novo != LAST_SENT) and ((time() - ULTIMO_ENVIO) > INTERVALO_MINIMO_ENVIO):
+                    
+                    now = datetime.now()
+                    now_br = now.astimezone(TZ_BR)
+
                     raw = f"{novo:.2f}"
-                    dstr = now.strftime("%Y-%m-%d")
-                    tkey = now.strftime("%H-%M-%S.%f")
-                    tdisp = now.strftime("%H:%M:%S")
-                    color = get_color(novo)
-
-                    entry_key = f"{dstr}_{tkey}_{raw}x".replace(':', '-').replace('.', '-')
-                    data = {"multiplier": raw, "time": tdisp, "color": color, "date": dstr}
-
+                    date_str = now_br.strftime("%Y-%m-%d")
+                    time_key = now_br.strftime("%H-%M-%S.%f")
+                    time_display = now_br.strftime("%H:%M:%S")
+                    color = getColorClass(novo)
+                    
+                    entry_key = f"{date_str}_{time_key}_{raw}x".replace(':', '-').replace('.', '-')
+                    entry = {"multiplier": raw, "time": time_display, "color": color, "date": date_str}
+                    
                     try:
-                        db.reference(f"history/{entry_key}").set(data)
-                        print(f"🔥 {raw}x salvo às {tdisp}")
+                        db.reference(f"history/{entry_key}").set(entry)
+                        print(f"🔥 {raw}x salvo às {time_display}")
                     except Exception as e:
-                        print("⚠️ Erro ao salvar no Firebase:", e)
-
-                    last_sent = novo
-                    last_sent_ts = time()
-                    last_seen_ts = time()
-
+                        print("⚠️ Erro ao salvar:", e)
+                        
+                    LAST_SENT = novo
+                    ULTIMO_ENVIO = time()
+                    ULTIMO_MULTIPLIER_TIME = time() # Reseta o timer de inatividade
+            
+            # Volta para o conteúdo principal antes de esperar o polling (boa prática)
             driver.switch_to.default_content()
             sleep(POLLING_INTERVAL)
 
         except (StaleElementReferenceException, TimeoutException):
-            print("⚠️ Elemento instável. Tentando reanexar histórico…")
+            print("⚠️ Elemento histórico obsoleto/sumiu. Recarregando elementos...")
             driver.switch_to.default_content()
-            iframe, hist = attach_history(driver)
-            if not hist:
-                print(f"⏳ Retentando em {RETRY_DELAY}s…")
-                try: driver.quit()
-                except: pass
-                sleep(RETRY_DELAY)
-                return start_bot()
+            iframe, hist = initialize_game_elements(driver)
             continue
 
         except Exception as e:
-            print(f"❌ Erro inesperado no loop: {e}")
-            try: driver.quit()
-            except: pass
-            print(f"⏳ Reiniciando em {RETRY_DELAY}s…")
-            sleep(RETRY_DELAY)
-            return start_bot()
+            print(f"❌ Erro inesperado: {e}")
+            sleep(3)
+            continue
 
-# =========================
-# ▶️ ENTRYPOINT
-# =========================
+# =============================================================
+# ▶️ INÍCIO DO SCRIPT
+# =============================================================
 if __name__ == "__main__":
-    try:
-        init_firebase()
-    except Exception as e:
-        print("❌ Firebase não inicializou:", e)
-        raise
-
     if not EMAIL or not PASSWORD:
-        print("❗ Configure EMAIL e PASSWORD nas variáveis do Railway.")
+        print("\n❗ Configure as variáveis de ambiente EMAIL e PASSWORD ou defina-as diretamente no código.")
     else:
+        # Chama a função inicial com o dia atual para controle do reinício
         start_bot(relogin_done_for=date.today())
