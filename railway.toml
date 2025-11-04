@@ -1,9 +1,7 @@
 [build]
-# Para ARM64 no Railway: instala Chromium + Chromedriver do sistema
 nixPkgs = [
   "chromium",
   "chromedriver",
-  # DEPENDÊNCIAS ESSENCIAIS PARA EXECUTAR O CHROME EM HEADLESS NO LINUX:
   "libnss", 
   "libgconf",
   "libxss", 
