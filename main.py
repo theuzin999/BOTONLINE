@@ -206,16 +206,19 @@ def process_login(driver):
     return True
 
 def start_driver():
-    """Inicializa o driver do Chrome."""
     options = webdriver.ChromeOptions()
-    options.add_argument("--no-sandbox")
+    options.add_argument("--headless=new")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-gpu")
     options.add_argument("--disable-extensions")
-    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--start-maximized")
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
+    return webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options
+    )
 
 # =============================================================
 # 🚀 LOOP PRINCIPAL
