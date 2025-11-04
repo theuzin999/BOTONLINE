@@ -1,5 +1,5 @@
 [build]
-# instala o Chromium + Chromedriver no container
+# Para ARM64 no Railway: instala Chromium + Chromedriver do sistema
 nixPkgs = [
   "chromium",
   "chromedriver"
