@@ -184,8 +184,11 @@ def start_driver():
     options.add_argument("--remote-debugging-port=9222")
     options.add_argument("--disable-features=BlinkGenPropertyTrees")
     options.add_argument("--window-size=1920,1080")
+    
+    options.binary_location = 'chromium-browser' # Caminho do Chromium no NixPkgs
 
-    return webdriver.Chrome(options=options)
+    service = Service(executable_path='chromedriver')
+    return webdriver.Chrome(service=service, options=options)
 
 
 def start_bot(relogin_done_for: date = None):
