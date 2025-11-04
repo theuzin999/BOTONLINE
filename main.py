@@ -3,8 +3,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-# from webdriver_manager.chrome import ChromeDriverManager  # REMOVIDO
-# from webdriver_manager.chrome import ChromeDriverManager, ChromeType # REMOVIDO
+from webdriver_manager.chrome import ChromeDriverManager # RESTAURADO
+from webdriver_manager.chrome import ChromeDriverManager, ChromeType # RESTAURADO
 from time import sleep, time
 from datetime import datetime, date
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
@@ -203,8 +203,8 @@ def process_login(driver):
     
     return True
 
-# Importação de Service mantida, mas ChromeDriverManager removida
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 def start_driver():
     options = webdriver.ChromeOptions()
@@ -217,9 +217,8 @@ def start_driver():
     options.add_argument("--disable-features=BlinkGenPropertyTrees")
     options.add_argument("--window-size=1920,1080")
 
-    # Corrigido para usar o chromedriver instalado pelo NixPkgs no Railway
-    service = Service("/usr/bin/chromedriver")
-    
+    # RESTAURADO: Usa o webdriver-manager, que agora funcionará com as dependências do Railway
+    service = Service(ChromeDriverManager(chrome_type=ChromeType.GOOGLE).install())
     return webdriver.Chrome(service=service, options=options)
 
 
@@ -231,8 +230,6 @@ def start_bot(relogin_done_for: date = None):
     print("         INICIALIZANDO GOATHBOT")
     print("==============================================")
     
-    # A exceção no seu log original estava aqui.
-    # O bloco try/except no fluxo de inicialização do start_bot cuidará das falhas.
     driver = start_driver()
     
     # === FLUXO DE INICIALIZAÇÃO E RECONEXÃO ===
