@@ -214,8 +214,10 @@ def start_driver():
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--remote-debugging-port=9222")
 
-    service = Service(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=options)
+   from webdriver_manager.core.utils import ChromeType
+
+service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
+return webdriver.Chrome(service=service, options=options)
 
 
 # =============================================================
