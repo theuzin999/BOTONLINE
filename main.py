@@ -217,7 +217,7 @@ def start_driver():
     options.add_argument("--disable-features=BlinkGenPropertyTrees")
     options.add_argument("--window-size=1920,1080")
 
-    # RESTAURADO: Usa o webdriver-manager, que agora funcionará com as dependências do Railway
+    # Usa o webdriver-manager, que agora funcionará com as dependências do Railway
     service = Service(ChromeDriverManager(chrome_type=ChromeType.GOOGLE).install())
     return webdriver.Chrome(service=service, options=options)
 
