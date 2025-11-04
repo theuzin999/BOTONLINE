@@ -19,7 +19,7 @@ import pytz
 import json
 
 DATABASE_URL = os.getenv("DATABASE_URL")  # ela já está lá no railway
-credJson = os.getenv("SERVICE.ACCOUNT.KEY")
+credJson = os.getenv("SERVICE_ACCOUNT_KEY")
 
 try:
     cred = credentials.Certificate(json.loads(credJson))
