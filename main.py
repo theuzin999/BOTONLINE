@@ -4,6 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.utils import ChromeType
 from time import sleep, time
 from datetime import datetime, date
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
@@ -213,8 +214,6 @@ def start_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--remote-debugging-port=9222")
-
-   from webdriver_manager.core.utils import ChromeType
 
 service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
 return webdriver.Chrome(service=service, options=options)
