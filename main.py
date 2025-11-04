@@ -185,9 +185,14 @@ def start_driver():
     options.add_argument("--disable-features=BlinkGenPropertyTrees")
     options.add_argument("--window-size=1920,1080")
     
-    options.binary_location = 'chromium-browser' # Caminho do Chromium no NixPkgs
+    # 🌟 CORREÇÃO 1: Caminho absoluto para o browser (Chromium)
+    # Este caminho é o padrão para binários no ambiente Railway/NixPkgs
+    options.binary_location = '/usr/bin/chromium-browser' 
 
-    service = Service(executable_path='chromedriver')
+    # 🌟 CORREÇÃO 2: Caminho explícito para o driver
+    # Este caminho é o padrão para o driver no ambiente Railway/NixPkgs
+    service = Service(executable_path='/usr/bin/chromedriver')
+    
     return webdriver.Chrome(service=service, options=options)
 
 
