@@ -22,12 +22,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")  # ela já está lá no railway
 credJson = os.getenv("SERVICE_ACCOUNT_KEY")
 
 try:
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(json.loads(credJson))
-        firebase_admin.initialize_app(cred, {
-            "databaseURL": DATABASE_URL
-        })
-    print("✅ Firebase Admin SDK inicializado com sucesso. O bot salvará dados.")
+    cred = credentials.Certificate(json.loads(credJson))
+    firebase_admin.initialize_app(cred, {
+        "databaseURL": DATABASE_URL
+    })
+    print("✅ Firebase Admin SDK inicializado com sucesso.")
 except Exception as e:
     print("\n❌ ERRO DE CONEXÃO FIREBASE:", e)
     exit()
