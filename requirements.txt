@@ -1,4 +1,4 @@
 selenium>=4.20.0
 firebase-admin>=6.5.0
 pytz>=2024.1
-webdriver-manager>=4.0.0  # NOVO: Necessário para as importações no main.py
+webdriver-manager>=4.0.0  # Adicionar o gerenciador de drivers

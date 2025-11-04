@@ -3,7 +3,7 @@
 nixPkgs = [
   "chromium",
   "chromedriver",
-  # Dependências essenciais para o ChromeDriver rodar em ambiente Linux/headless:
+  # DEPENDÊNCIAS ESSENCIAIS PARA EXECUTAR O CHROME EM HEADLESS NO LINUX:
   "libnss", 
   "libgconf",
   "libxss", 
