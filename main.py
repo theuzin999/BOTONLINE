@@ -4,7 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.core.driver_cache import ChromeType
+from webdriver_manager.chrome import ChromeDriverManager, ChromeType
 from time import sleep, time
 from datetime import datetime, date
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
