@@ -1,9 +1,0 @@
-[build]
-builder = "Dockerfile"
-
-[deploy]
-restartPolicyType = "ON_FAILURE"
-
-[service]
-name = "goathbot"
-startCommand = "python main.py"
