@@ -1,24 +1,18 @@
 FROM python:3.10-slim
 
-# Instala dependências do Chromium e Chromedriver
 RUN apt-get update && \
-    apt-get install -y \
-        chromium \
-        chromium-driver \
-        libnss3 \
-        xvfb \
-        wget \
-    && rm -rf /var/lib/apt/lists/*
+    apt-get install -y chromium chromium-driver libnss3 xvfb wget unzip && \
+    apt-get clean
 
-# Variáveis para evitar erro do Selenium/Chrome
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+WORKDIR /app
 
-# Instala dependências Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o código
+# Copia a chave do Firebase para dentro do container
+COPY firebase_key.json firebase_key.json
+
+# Copia o restante do projeto
 COPY . .
 
 CMD ["python", "main.py"]
