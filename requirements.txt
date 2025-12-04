@@ -1,4 +1,6 @@
-selenium==4.16.0
-webdriver-manager==4.0.1
-firebase-admin==6.2.0
-pytz==2024.1
+selenium
+firebase-admin
+webdriver-manager
+requests
+pytz
+undetected-chromedriver
