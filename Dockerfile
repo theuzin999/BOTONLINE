@@ -1,32 +1,24 @@
-# Usa Python 3.11 Slim (Versão leve e compatível com Selenium)
-FROM python:3.11-slim
+FROM python:3.10-slim
 
-# Evita arquivos temporários e logs travados
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Instala o Chromium, Driver e dependências necessárias
-# Removemos bibliotecas obsoletas que causavam o erro no seu print
-RUN apt-get update && apt-get install -y \
-    chromium \
-    chromium-driver \
-    libnss3 \
-    libgconf-2-4 \
-    xvfb \
-    wget \
-    unzip \
-    --no-install-recommends \
+# Instala dependências do Chromium e Chromedriver
+RUN apt-get update && \
+    apt-get install -y \
+        chromium \
+        chromium-driver \
+        libnss3 \
+        xvfb \
+        wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Define pasta de trabalho
-WORKDIR /app
+# Variáveis para evitar erro do Selenium/Chrome
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
-# Copia e instala as bibliotecas
+# Instala dependências Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o código do bot
+# Copia o código
 COPY . .
 
-# Comando para iniciar
 CMD ["python", "main.py"]
