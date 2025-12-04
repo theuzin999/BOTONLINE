@@ -18,27 +18,26 @@ import firebase_admin
 from firebase_admin import credentials, db
 
 # =============================================================
-# 🔧 SETUP RAILWAY (CRIA O ARQUIVO JSON DAS CREDENCIAIS)
+# 🔧 SETUP RAILWAY (PROCESSO DE SEGURANÇA)
 # =============================================================
-# O Railway não permite subir arquivos sensíveis com segurança no GitHub.
-# Nós colamos o conteúdo do JSON em uma Variável de Ambiente e o script cria o arquivo aqui.
+# O Railway usa variáveis de ambiente. Este bloco cria o arquivo
+# serviceAccountKey.json na hora que o bot liga, usando a variável.
 SERVICE_ACCOUNT_FILE = 'serviceAccountKey.json'
-
 firebase_creds = os.getenv("FIREBASE_CREDENTIALS")
+
 if firebase_creds:
-    print("⚙️ [SETUP] Criando arquivo serviceAccountKey.json via Variáveis de Ambiente...")
+    print("⚙️ [SETUP] Criando credenciais Firebase via Variável de Ambiente...")
     with open(SERVICE_ACCOUNT_FILE, "w") as f:
         f.write(firebase_creds)
 else:
-    print(f"⚠️ [SETUP] Variável FIREBASE_CREDENTIALS não encontrada. Buscando arquivo {SERVICE_ACCOUNT_FILE} local...")
+    print(f"⚠️ [SETUP] Variável FIREBASE_CREDENTIALS não encontrada. Tentando arquivo local...")
 
 # =============================================================
-# 🔥 GOATHBOT V6.0 - DUAL MODE (SERVER EDITION)
+# 🔥 GOATHBOT V6.0 - DUAL MODE
 # =============================================================
 DATABASE_URL = 'https://history-dashboard-a70ee-default-rtdb.firebaseio.com'
 URL_DO_SITE = "https://www.goathbet.com"
 
-# CONFIGURAÇÃO DOS DOIS JOGOS
 CONFIG_BOTS = [
     {
         "nome": "ORIGINAL",
@@ -52,7 +51,7 @@ CONFIG_BOTS = [
     }
 ]
 
-# Configuração Limpa de Logs
+# Configuração de Logs
 logging.getLogger('WDM').setLevel(logging.ERROR)
 os.environ['WDM_LOG_LEVEL'] = '0'
 
@@ -60,12 +59,11 @@ EMAIL = os.getenv("EMAIL")
 PASSWORD = os.getenv("PASSWORD")
 TZ_BR = pytz.timezone("America/Sao_Paulo")
 
-# Configurações Turbo
 POLLING_INTERVAL = 0.1          
 TEMPO_MAX_INATIVIDADE = 360     
 
 # =============================================================
-# 🔧 FIREBASE
+# 🔧 CONEXÃO FIREBASE
 # =============================================================
 try:
     if not firebase_admin._apps:
@@ -74,11 +72,11 @@ try:
     print("✅ Conexão Firebase estabelecida.")
 except Exception as e:
     print(f"\n❌ ERRO CRÍTICO NO FIREBASE: {e}")
-    # Se falhar o Firebase, não adianta continuar
+    # Sem banco de dados, o bot não serve de nada, então encerramos.
     exit(1)
 
 # =============================================================
-# 🛠️ DRIVER E NAVEGAÇÃO
+# 🛠️ NAVEGADOR (OTIMIZADO PARA RAILWAY/LINUX)
 # =============================================================
 def start_driver():
     options = webdriver.ChromeOptions()
@@ -92,17 +90,15 @@ def start_driver():
     options.add_argument("--log-level=3")
     options.add_argument("--silent")
 
-    # CONFIGURAÇÃO ESPECIAL PARA DOCKER/RAILWAY
-    # O Dockerfile instala o chromium em /usr/bin/chromium
+    # Caminho padrão do Chromium no Docker/Linux (Railway)
     options.binary_location = "/usr/bin/chromium"
-    
+
     try:
-        # Tenta usar o driver nativo do sistema linux instalado via apt-get
+        # Tenta usar o driver nativo instalado pelo Dockerfile
         return webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=options)
     except Exception as e:
-        print(f"⚠️ Driver nativo não encontrado, tentando WebDriverManager: {e}")
-        # Fallback (geralmente usado em testes locais fora do Docker)
-        # Nota: Se estiver rodando localmente no Windows, remova a linha 'options.binary_location' acima
+        print(f"⚠️ Driver nativo falhou, tentando gerenciador automático: {e}")
+        # Fallback caso mude o ambiente
         return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 def safe_click(driver, by, value, timeout=5):
@@ -113,7 +109,6 @@ def safe_click(driver, by, value, timeout=5):
     except: return False
 
 def check_blocking_modals(driver):
-    """Fecha popups chatos"""
     try:
         xpaths = [
             "//button[contains(., 'Sim')]", 
@@ -126,12 +121,12 @@ def check_blocking_modals(driver):
     except: pass
 
 def process_login(driver, target_link):
-    # 1. Acessa Home e faz Login
     try: driver.get(URL_DO_SITE)
     except: pass
     sleep(2)
     check_blocking_modals(driver)
 
+    # Tenta clicar em entrar
     if safe_click(driver, By.XPATH, "//button[contains(., 'Entrar')]", 5) or \
        safe_click(driver, By.CSS_SELECTOR, 'a[href*="login"]', 5):
         sleep(1)
@@ -142,7 +137,6 @@ def process_login(driver, target_link):
                 sleep(3)
         except: pass
     
-    # 2. Navega para o jogo específico
     driver.get(target_link)
     
     try:
@@ -155,7 +149,6 @@ def process_login(driver, target_link):
     return True
 
 def initialize_game_elements(driver):
-    """Tenta localizar o iframe e o elemento de histórico."""
     try:
         driver.switch_to.default_content()
     except: pass
@@ -171,7 +164,6 @@ def initialize_game_elements(driver):
 
     hist = None
     try:
-        # Payouts-block é mais comum para o container de histórico
         hist = WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".payouts-block, app-stats-widget"))
         )
@@ -190,17 +182,16 @@ def getColorClass(value):
     except: return "default-bg"
 
 # =============================================================
-# 🤖 LÓGICA DE SESSÃO INDIVIDUAL (THREAD)
+# 🤖 LOOP PRINCIPAL (THREAD INDIVIDUAL)
 # =============================================================
 def run_single_bot(bot_config):
-    """Função que roda o ciclo de vida completo de UM bot"""
     nome = bot_config["nome"]
     link = bot_config["link"]
     path_fb = bot_config["firebase_path"]
     
     relogin_date = date.today()
 
-    while True: # Loop infinito de reconexão se cair
+    while True: 
         driver = None
         try:
             print(f"🔄 [{nome}] Iniciando driver...")
@@ -208,30 +199,27 @@ def run_single_bot(bot_config):
             process_login(driver, link)
 
             iframe, hist = initialize_game_elements(driver)
-            if not hist: raise Exception("Elementos não encontrados") # Força o reinício
+            if not hist: raise Exception("Elementos do jogo não carregaram")
 
             print(f"🚀 [{nome}] MONITORANDO EM '{path_fb}'")
             
             LAST_SENT = None
             ULTIMO_MULTIPLIER_TIME = time()
             
-            while True: # Loop de leitura
-                # 1. Manutenção Diária
+            while True:
+                # Reinício diário (evita vazamento de memória do Chrome)
                 now_br = datetime.now(TZ_BR)
-                # Verifica entre 00:00 e 00:05
                 if now_br.hour == 0 and now_br.minute <= 5 and (relogin_date != now_br.date()):
-                    print(f"🌙 [{nome}] Reinício diário...")
+                    print(f"🌙 [{nome}] Reinício diário programado...")
                     driver.quit()
                     relogin_date = now_br.date()
-                    break # Sai do loop de leitura para reiniciar driver
+                    break 
 
-                # 2. Check Inatividade (6 minutos sem novo multiplicador)
+                # Check Inatividade
                 if (time() - ULTIMO_MULTIPLIER_TIME) > TEMPO_MAX_INATIVIDADE:
-                    raise Exception("Inatividade detectada")
+                    raise Exception("Sem novos resultados há 6 minutos")
 
-                # 3. Leitura e Processamento
                 try:
-                    # Tenta pegar apenas o primeiro multiplicador (mais recente)
                     first_payout = hist.find_element(By.CSS_SELECTOR, ".payout:first-child, .bubble-multiplier:first-child")
                     raw_text = first_payout.get_attribute("innerText")
                     clean_text = raw_text.strip().lower().replace('x', '')
@@ -246,7 +234,6 @@ def run_single_bot(bot_config):
                         sleep(POLLING_INTERVAL)
                         continue 
                     
-                    # 4. Envio
                     if novo != LAST_SENT:
                         ULTIMO_MULTIPLIER_TIME = time()
                         now_br = datetime.now(TZ_BR)
@@ -257,6 +244,7 @@ def run_single_bot(bot_config):
                             "color": getColorClass(novo),
                             "date": now_br.strftime("%Y-%m-%d")
                         }
+                        # Chave única baseada no tempo
                         key = now_br.strftime("%Y-%m-%d_%H-%M-%S-%f").replace('.', '-')
                         
                         try:
@@ -264,47 +252,40 @@ def run_single_bot(bot_config):
                             print(f"🔥 [{nome}] {entry['multiplier']}x")
                             LAST_SENT = novo
                         except Exception as e:
-                            print(f"⚠️ [{nome}] Erro Firebase: {e}")
+                            print(f"⚠️ [{nome}] Erro ao enviar para Firebase: {e}")
 
                     sleep(POLLING_INTERVAL)
 
-                except (StaleElementReferenceException, TimeoutException, Exception) as e:
-                    # Em caso de erro de leitura, tenta recuperar
-                    # print(f"⚠️ [{nome}] Erro leitura: {e}") # Comentado para limpar log
+                except (StaleElementReferenceException, TimeoutException) as e:
+                    # Erro leve, tenta reconectar elementos
                     driver.switch_to.default_content()
                     iframe, hist = initialize_game_elements(driver)
-                    
-                    if not hist: 
-                        raise Exception("Falha crítica ao re-inicializar elementos.")
-                    
+                    if not hist: raise Exception("Falha ao recuperar elementos")
                     sleep(POLLING_INTERVAL)
                     continue 
 
         except Exception as e:
-            print(f"❌ [{nome}] Falha: {e}. Reiniciando em 5s...")
+            print(f"❌ [{nome}] Erro/Restart: {e}")
             if driver:
                 try: driver.quit()
                 except: pass
-            sleep(5)
+            sleep(10) # Espera 10s antes de tentar voltar
 
 # =============================================================
-# 🚀 EXECUTOR PARALELO
+# 🚀 INICIALIZAÇÃO
 # =============================================================
 if __name__ == "__main__":
     if not EMAIL or not PASSWORD:
-        print("❗ ATENÇÃO: Configure EMAIL e PASSWORD nas variáveis de ambiente do Railway.")
+        print("❗ ERRO: Configure as variáveis EMAIL e PASSWORD no painel do Railway!")
     
-    print("==============================================")
-    print("    GOATHBOT V6.0 - RAILWAY EDITION")
-    print("==============================================")
-
+    print("=== INICIANDO SISTEMA ===")
+    
     threads = []
     for config in CONFIG_BOTS:
         t = threading.Thread(target=run_single_bot, args=(config,))
         t.start()
         threads.append(t)
-        sleep(5) # Pausa maior entre o start de cada thread para aliviar o boot do container
+        sleep(5) 
 
-    # Mantém script principal rodando
     for t in threads:
         t.join()
