@@ -1,11 +1,12 @@
-# Usa Python 3.11 Slim (Leve e estável)
+# Usa Python 3.11 Slim (Versão leve e compatível com Selenium)
 FROM python:3.11-slim
 
-# Variáveis para otimizar o Python no Docker
+# Evita arquivos temporários e logs travados
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Instala o Chromium e dependências do sistema necessárias
+# Instala o Chromium, Driver e dependências necessárias
+# Removemos bibliotecas obsoletas que causavam o erro no seu print
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
@@ -17,15 +18,15 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Define o diretório de trabalho dentro do container
+# Define pasta de trabalho
 WORKDIR /app
 
-# Copia e instala as dependências Python
+# Copia e instala as bibliotecas
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o restante do código
+# Copia o código do bot
 COPY . .
 
-# Comando que inicia o bot (assumindo que seu script se chama main.py)
+# Comando para iniciar
 CMD ["python", "main.py"]
