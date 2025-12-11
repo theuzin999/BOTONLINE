@@ -1,6 +1,0 @@
-selenium
-firebase-admin
-webdriver-manager
-requests
-pytz
-undetected-chromedriver
