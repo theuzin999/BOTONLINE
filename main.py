@@ -1,7 +1,7 @@
+import asyncio
+from playwright.async_api import async_playwright
 import time
-import requests
 
-# Coloque os links dos seus sites aqui
 URLS = [
     "https://botapostamax.netlify.app/",
     "https://botapostaganha.netlify.app/"
@@ -9,15 +9,28 @@ URLS = [
 
 INTERVALO = 7200  # 2 horas em segundos
 
-def acessar_sites():
-    for url in URLS:
-        try:
-            r = requests.get(url, timeout=15)
-            print(f"[OK] {url} - {r.status_code}")
-        except Exception as e:
-            print(f"[ERRO] {url} - {e}")
+async def manter_aberto(playwright):
+    browser = await playwright.chromium.launch(headless=True)
+    context = await browser.new_context()
 
-if __name__ == "__main__":
+    pages = []
+
+    # abre cada site e deixa aberto
+    for url in URLS:
+        page = await context.new_page()
+        await page.goto(url)
+        print(f"[ABERTO] {url}")
+        pages.append(page)
+
+    # loop infinito: recarrega a cada 2h
     while True:
-        acessar_sites()
-        time.sleep(INTERVALO)
+        await asyncio.sleep(INTERVALO)
+        for page, url in zip(pages, URLS):
+            await page.reload()
+            print(f"[RECARREGADO] {url} - {time.ctime()}")
+
+async def main():
+    async with async_playwright() as playwright:
+        await manter_aberto(playwright)
+
+asyncio.run(main())
