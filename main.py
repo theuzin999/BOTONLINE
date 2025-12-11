@@ -3,8 +3,8 @@ import requests
 
 # Coloque os links dos seus sites aqui
 URLS = [
-    "https://seusite1.netlify.app/",
-    "https://seusite2.netlify.app/"
+    "https://botapostamax.netlify.app/",
+    "https://botapostaganha.netlify.app/"
 ]
 
 INTERVALO = 7200  # 2 horas em segundos
